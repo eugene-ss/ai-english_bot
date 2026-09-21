@@ -1,0 +1,16 @@
+[project]
+name = "eng-bot"
+version = "0.1.0"
+description = "AI Telegram Assistant for learning English"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiogram>=3.17.0",
+    "groq>=0.18.0",
+    "google-genai>=0.1.1",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "pyyaml>=6.0.2",
+    "redis>=5.0.1",
+    "python-logging-loki>=0.3.1",
+]

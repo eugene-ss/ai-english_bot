@@ -1,0 +1,14 @@
+name: Production Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via Render Webhook
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_WEBHOOK_URL }}"

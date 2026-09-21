@@ -1,0 +1,24 @@
+llm:
+  # Groq by default. Options: "gemini" or "groq"
+  # active_text_provider: "gemini"
+  active_text_provider: "groq"
+
+  # Настройки для Gemini
+  gemini:
+    model_id: "gemini-2.5-flash"
+    temperature: 0.5
+
+  # Настройки для Groq
+  groq:
+    model_id: "openai/gpt-oss-20b"
+    temperature: 0.5
+
+stt:
+  # Модель для распознавания речи (Groq Whisper)
+  model_id: "whisper-large-v3"
+
+bot:
+  max_history_len: 12
+  bot:
+    max_history_len: 12
+    use_redis: false
