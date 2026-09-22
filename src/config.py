@@ -19,6 +19,11 @@ class LLMConfig(BaseModel):
 class STTConfig(BaseModel):
     model_id: str
 
+class TTSConfig(BaseModel):
+    model_id: str = "canopylabs/orpheus-v1-english"
+    voice: str = "autumn"
+    max_chars: int = 200
+
 class BotConfig(BaseModel):
     max_history_len: int = 12
     use_redis: bool = True
@@ -35,6 +40,7 @@ class AppSettings(BaseSettings):
 
     llm: LLMConfig
     stt: STTConfig
+    tts: TTSConfig = Field(default_factory=TTSConfig)
     bot: BotConfig
 
     model_config = SettingsConfigDict(

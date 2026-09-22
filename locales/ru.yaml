@@ -1,6 +1,11 @@
 btn_explain: "Объяснить грамматику"
 btn_next_question: "Другой вопрос"
+btn_listen: "Прослушать"
 btn_reset: "Очистить контекст и начать заново"
+callback_listening: "Озвучиваю..."
+callback_nothing_to_listen: "Нечего озвучить"
+teacher_speaking_html: "<i>Учитель отвечает голосом...</i>"
+tts_error: "Не удалось озвучить ответ. Текст выше всё равно доступен."
 
 context_reset_html: "<b>Наша история обучения успешно сброшена!</b> Напишите или скажите что-нибудь для начала нового урока."
 callback_context_cleared: "Контекст очищен"

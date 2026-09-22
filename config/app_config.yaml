@@ -3,22 +3,24 @@ llm:
   # active_text_provider: "gemini"
   active_text_provider: "groq"
 
-  # Настройки для Gemini
   gemini:
     model_id: "gemini-2.5-flash"
     temperature: 0.5
 
-  # Настройки для Groq
   groq:
     model_id: "openai/gpt-oss-20b"
     temperature: 0.5
 
 stt:
-  # Модель для распознавания речи (Groq Whisper)
   model_id: "whisper-large-v3"
+
+tts:
+  # Groq Orpheus. Один раз принять условия модели:
+  # https://console.groq.com/playground?model=canopylabs/orpheus-v1-english
+  model_id: "canopylabs/orpheus-v1-english"
+  voice: "autumn"
+  max_chars: 200
 
 bot:
   max_history_len: 12
-  bot:
-    max_history_len: 12
-    use_redis: true
+  use_redis: true

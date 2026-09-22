@@ -12,6 +12,7 @@ class DurableStorage:
     def __init__(self):
         self.use_redis = settings.bot.use_redis
         self.local_storage = {}
+        self.local_speakable = {}
         self.redis = None
 
         if self.use_redis:
@@ -58,16 +59,34 @@ class DurableStorage:
 
         self.local_storage[user_id] = history
 
-    def clear(self, user_id: int):
+    def set_last_speakable(self, user_id: int, text: str) -> None:
+        self.local_speakable[user_id] = text
         if self.use_redis:
             try:
-                key = f"chat_session:{user_id}"
-                self.redis.delete(key)
-                return
+                self.redis.set(f"speakable:{user_id}", text, ex=172800)
+            except Exception as e:
+                logger.error(f"Redis SET speakable failed for user {user_id}: {e}")
+
+    def get_last_speakable(self, user_id: int) -> str:
+        if self.use_redis:
+            try:
+                value = self.redis.get(f"speakable:{user_id}")
+                if value:
+                    return value
+            except Exception as e:
+                logger.error(f"Redis GET speakable failed for user {user_id}: {e}")
+        return self.local_speakable.get(user_id, "")
+
+    def clear(self, user_id: int):
+        self.local_storage[user_id] = []
+        self.local_speakable.pop(user_id, None)
+        if self.use_redis:
+            try:
+                pipe = self.redis.pipeline()
+                pipe.delete(f"chat_session:{user_id}")
+                pipe.delete(f"speakable:{user_id}")
+                pipe.execute()
             except Exception as e:
                 logger.error(f"Redis DELETE failed for user {user_id}: {e}")
-
-        if user_id in self.local_storage:
-            self.local_storage[user_id] = []
 
 sessions = DurableStorage()

@@ -22,6 +22,7 @@ class AIProviderManager:
             "Отвечай коротко и структурно: максимум 5-10 строк. "
             "Ошибки: перечисли ключевые ошибки (если имеются) - самые важные. "
             "исправленный вариант (английский) - 1 строка. "
+            "В конце всегда дай короткий английский вопрос или реплику для продолжения диалога (1 предложение). "
             "ОГРАНИЧЕНИЯ: "
             "- Не вводи новую сложную грамматику и лексику сверх A1. "
             "- Если пользователь не дал ответ (или дал непонятно) - задай уточняющий вопрос 1 предложением. "
@@ -35,7 +36,24 @@ class AIProviderManager:
                 model=settings.stt.model_id,
                 response_format="text",
             )
-        return transcription
+        if isinstance(transcription, str):
+            return transcription
+        return getattr(transcription, "text", str(transcription))
+
+    def synthesize_speech(self, text: str, output_wav_path: str) -> None:
+        """TTS через Groq Orpheus → WAV. Текст должен быть уже укорочен до max_chars."""
+        response = self.groq_client.audio.speech.create(
+            model=settings.tts.model_id,
+            voice=settings.tts.voice,
+            input=text,
+            response_format="wav",
+        )
+        if hasattr(response, "write_to_file"):
+            response.write_to_file(output_wav_path)
+            return
+        payload = response.read() if hasattr(response, "read") else bytes(response)
+        with open(output_wav_path, "wb") as f:
+            f.write(payload)
 
     async def get_text_response(self, history_messages: list) -> str:
         provider = settings.llm.active_text_provider
@@ -79,6 +97,5 @@ class AIProviderManager:
             ),
         )
         return completion.choices[0].message.content
-
 
 ai = AIProviderManager()

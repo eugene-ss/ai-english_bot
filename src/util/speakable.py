@@ -1,6 +1,5 @@
 import re
 
-
 _CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
 _MARKUP_RE = re.compile(r"[*_`#]+|<[^>]+>")
 _BULLET_RE = re.compile(r"^[\s]*[-•\d.)]+\s*")
@@ -8,7 +7,6 @@ _LABEL_RE = re.compile(
     r"^(correct(?:ed)?|fix|example|answer|question|say|try)\s*[:\-–—]\s*",
     re.IGNORECASE,
 )
-
 
 def extract_speakable_english(text: str, max_chars: int = 200) -> str:
     """Достаёт короткую английскую реплику учителя для TTS (лимит Orpheus — 200)."""
