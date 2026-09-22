@@ -11,15 +11,31 @@ llm:
     model_id: "openai/gpt-oss-20b"
     temperature: 0.5
 
+  # Ограничивают длину ответа и время ожидания провайдера
+  max_tokens: 700
+  timeout_s: 45.0
+
 stt:
   model_id: "whisper-large-v3"
+  timeout_s: 60.0
 
 tts:
-  # Groq Orpheus
+  enabled: true
+  # Groq Orpheus. Условия модели принимаются один раз в консоли:
+  # https://console.groq.com/playground?model=canopylabs/orpheus-v1-english
   model_id: "canopylabs/orpheus-v1-english"
   voice: "autumn"
   max_chars: 200
+  timeout_s: 45.0
+  # После стольких ошибок подряд озвучка отключается на cooldown_s секунд
+  failure_threshold: 3
+  cooldown_s: 300.0
 
 bot:
   max_history_len: 12
   use_redis: true
+  session_ttl_s: 172800
+  max_voice_duration_s: 180
+  max_voice_size_bytes: 20971520
+  min_request_interval_s: 1.0
+  redis_retry_interval_s: 30.0

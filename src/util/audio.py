@@ -1,8 +1,15 @@
 import os
 import subprocess
 
+def _run_ffmpeg(command: list[str]) -> None:
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        tail = result.stderr[-800:] if result.stderr else "no stderr"
+        raise RuntimeError(f"ffmpeg failed ({' '.join(command[:4])}...): {tail}")
+
 def convert_ogg_to_wav(input_path: str, output_path: str) -> None:
-    command = [
+    """OGG/Opus от Telegram в WAV 16 кГц моно — формат, который ждёт Whisper."""
+    _run_ffmpeg([
         "ffmpeg", "-y",
         "-i", input_path,
         "-vn",
@@ -10,12 +17,11 @@ def convert_ogg_to_wav(input_path: str, output_path: str) -> None:
         "-ar", "16000",
         "-ac", "1",
         output_path,
-    ]
-    subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    ])
 
 def convert_wav_to_ogg_opus(input_path: str, output_path: str) -> None:
     """Telegram voice требует OGG/Opus, моно."""
-    command = [
+    _run_ffmpeg([
         "ffmpeg", "-y",
         "-i", input_path,
         "-vn",
@@ -23,12 +29,12 @@ def convert_wav_to_ogg_opus(input_path: str, output_path: str) -> None:
         "-c:a", "libopus",
         "-b:a", "48k",
         output_path,
-    ]
-    result = subprocess.run(command, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr[-800:] if result.stderr else "ffmpeg opus encode failed")
+    ])
 
 def remove_files(*paths: str) -> None:
     for path in paths:
-        if os.path.exists(path):
-            os.remove(path)
+        try:
+            if path and os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            pass

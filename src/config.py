@@ -15,18 +15,32 @@ class LLMConfig(BaseModel):
     active_text_provider: Literal["gemini", "groq"]
     gemini: ProviderConfig
     groq: ProviderConfig
+    max_tokens: int = 700
+    timeout_s: float = 45.0
 
 class STTConfig(BaseModel):
     model_id: str
+    timeout_s: float = 60.0
 
 class TTSConfig(BaseModel):
+    enabled: bool = True
     model_id: str = "canopylabs/orpheus-v1-english"
     voice: str = "autumn"
     max_chars: int = 200
+    timeout_s: float = 45.0
+    # Сколько подряд ошибок переводит TTS в паузу и на сколько секунд
+    failure_threshold: int = 3
+    cooldown_s: float = 300.0
 
 class BotConfig(BaseModel):
     max_history_len: int = 12
     use_redis: bool = True
+    session_ttl_s: int = 172800
+    max_voice_duration_s: int = 180
+    max_voice_size_bytes: int = 20 * 1024 * 1024
+    # Минимальный интервал между запросами одного пользователя
+    min_request_interval_s: float = 1.0
+    redis_retry_interval_s: float = 30.0
 
 class AppSettings(BaseSettings):
     telegram_bot_token: SecretStr = Field(..., alias="TELEGRAM_BOT_TOKEN")
