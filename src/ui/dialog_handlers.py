@@ -276,7 +276,7 @@ async def _finish_dialog(message: Message, user_id: int, state: FSMContext) -> N
         review = await dialogs.review(scenario, transcript)
     except Exception as e:
         logger.exception(f"Dialog review failed for user {user_id}: {e}")
-        await status.edit_text(labeled("error", "llm_unavailable"))
+        await _send_review_fallback(status, transcript)
         return
 
     await deliver(
@@ -285,6 +285,25 @@ async def _finish_dialog(message: Message, user_id: int, state: FSMContext) -> N
         html_prefix=f"{icon('explain')} {t('dialog_review_title_html')}\n\n",
         reply_markup=get_action_keyboard(),
         edit=True,
+    )
+
+async def _send_review_fallback(status: Message, transcript: list[dict]) -> None:
+    """Разбор не собрался — возвращаем хотя бы реплики ученика.
+
+    После нескольких ходов диалога уйти с одной лишь ошибкой значит потерять
+    всю практику, поэтому показываем сказанное: любую строку можно прислать
+    обычным сообщением и разобрать отдельно.
+    """
+    said = [turn for turn in transcript if turn.get("speaker") == "student"]
+    lines = [
+        f"{index}. {escape_html(turn.get('text', ''))}"
+        for index, turn in enumerate(said, start=1)
+    ]
+    body = "\n".join(lines)
+    await status.edit_text(
+        f"{icon('error')} {t('dialog_review_failed_html')}\n\n{body}",
+        parse_mode="HTML",
+        reply_markup=get_action_keyboard(),
     )
 
 def _last_teacher_line(transcript: list[dict]) -> str:

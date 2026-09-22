@@ -10,6 +10,10 @@ from src.util.yaml import load_yaml
 class ProviderConfig(BaseModel):
     model_id: str
     temperature: float = 0.7
+    # Только для reasoning-моделей (gpt-oss и подобные): без ограничения они
+    # расходуют весь бюджет токенов на размышления и не успевают выдать ответ.
+    # Пустая строка — параметр не отправляется.
+    reasoning_effort: Literal["", "low", "medium", "high"] = ""
 
 class LLMConfig(BaseModel):
     active_text_provider: Literal["gemini", "groq"]

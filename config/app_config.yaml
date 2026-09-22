@@ -10,6 +10,9 @@ llm:
   groq:
     model_id: "openai/gpt-oss-20b"
     temperature: 0.5
+    # gpt-oss без этого параметра тратит на размышления весь max_tokens и возвращает
+    # пустой content. Для моделей без reasoning оставить пустую строку.
+    reasoning_effort: "low"
 
   # Ограничивают длину ответа и время ожидания провайдера
   max_tokens: 700

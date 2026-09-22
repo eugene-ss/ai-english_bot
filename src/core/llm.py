@@ -243,6 +243,8 @@ class AIProviderManager:
         }
         if as_json:
             kwargs["response_format"] = {"type": "json_object"}
+        if cfg.reasoning_effort:
+            kwargs["reasoning_effort"] = cfg.reasoning_effort
 
         loop = asyncio.get_running_loop()
         completion = await loop.run_in_executor(
@@ -250,7 +252,19 @@ class AIProviderManager:
         )
         if not completion.choices:
             return ""
-        return completion.choices[0].message.content or ""
+
+        choice = completion.choices[0]
+        content = choice.message.content or ""
+        if not content:
+            # Обрыв по лимиту у reasoning-модели выглядит как пустой ответ,
+            # поэтому причину пишем явно: иначе диагностика теряется
+            used = getattr(completion.usage, "completion_tokens", "?")
+            logger.warning(
+                f"Groq returned no content: finish_reason={choice.finish_reason}, "
+                f"completion_tokens={used}/{settings.llm.max_tokens}, "
+                f"reasoning_effort={cfg.reasoning_effort or 'default'}"
+            )
+        return content
 
 
 ai = AIProviderManager()
