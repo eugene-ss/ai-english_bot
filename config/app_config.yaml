@@ -15,8 +15,7 @@ stt:
   model_id: "whisper-large-v3"
 
 tts:
-  # Groq Orpheus. Один раз принять условия модели:
-  # https://console.groq.com/playground?model=canopylabs/orpheus-v1-english
+  # Groq Orpheus
   model_id: "canopylabs/orpheus-v1-english"
   voice: "autumn"
   max_chars: 200
