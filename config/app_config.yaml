@@ -21,8 +21,7 @@ stt:
 
 tts:
   enabled: true
-  # Groq Orpheus. Условия модели принимаются один раз в консоли:
-  # https://console.groq.com/playground?model=canopylabs/orpheus-v1-english
+  # Groq Orpheus
   model_id: "canopylabs/orpheus-v1-english"
   voice: "autumn"
   max_chars: 200
@@ -30,6 +29,18 @@ tts:
   # После стольких ошибок подряд озвучка отключается на cooldown_s секунд
   failure_threshold: 3
   cooldown_s: 300.0
+  # Кнопка «медленнее»: ffmpeg atempo, допустимый диапазон 0.5-2.0
+  slow_tempo: 0.75
+  # Сколько храним Telegram file_id, чтобы не синтезировать фразу заново
+  cache_ttl_s: 2592000
+
+dialog:
+  enabled: true
+  # Лимиты удерживают расходы: каждая реплика это STT + LLM + TTS
+  max_turns: 8
+  max_duration_s: 1800
+  hints_count: 3
+  max_reply_chars: 160
 
 bot:
   max_history_len: 12

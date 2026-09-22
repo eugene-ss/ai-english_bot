@@ -1,0 +1,50 @@
+# Сценарии ролевого диалога. Реплики и подсказки — уровень A1.
+- id: cafe
+  title: "В кафе"
+  role: "бариста в небольшом кафе"
+  goal: "ученик заказывает напиток и отвечает на уточняющий вопрос"
+  opening: "Hi! Welcome. What would you like to drink?"
+  hints:
+    - "Tea, please"
+    - "I want coffee"
+    - "Water, please"
+
+- id: meeting
+  title: "Знакомство"
+  role: "новый знакомый на языковом клубе"
+  goal: "ученик представляется, говорит откуда он и задаёт встречный вопрос"
+  opening: "Hello! Nice to meet you. What is your name?"
+  hints:
+    - "My name is..."
+    - "I am from Belarus"
+    - "And you?"
+
+- id: shop
+  title: "В магазине"
+  role: "продавец в продуктовом магазине"
+  goal: "ученик просит нужный товар и спрашивает цену"
+  opening: "Good morning! Can I help you?"
+  hints:
+    - "I need bread"
+    - "How much is it?"
+    - "That is all, thank you"
+
+- id: directions
+  title: "Как пройти"
+  role: "прохожий на улице незнакомого города"
+  goal: "ученик спрашивает дорогу и благодарит"
+  opening: "Excuse me, do you need help?"
+  hints:
+    - "Where is the station?"
+    - "Is it far?"
+    - "Thank you very much"
+
+- id: hotel
+  title: "В гостинице"
+  role: "администратор на стойке регистрации отеля"
+  goal: "ученик заселяется и спрашивает о завтраке"
+  opening: "Good evening! Do you have a reservation?"
+  hints:
+    - "Yes, my name is..."
+    - "A room for two nights"
+    - "When is breakfast?"

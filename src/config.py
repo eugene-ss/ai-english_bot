@@ -31,6 +31,20 @@ class TTSConfig(BaseModel):
     # Сколько подряд ошибок переводит TTS в паузу и на сколько секунд
     failure_threshold: int = 3
     cooldown_s: float = 300.0
+    # Замедление для кнопки «медленнее»; ffmpeg atempo принимает 0.5-2.0
+    slow_tempo: float = 0.75
+    # Telegram file_id переиспользуется вместо повторного синтеза
+    cache_ttl_s: int = 2592000
+
+class DialogConfig(BaseModel):
+    """Ролевой голосовой диалог."""
+
+    enabled: bool = True
+    max_turns: int = 8
+    max_duration_s: int = 1800
+    hints_count: int = 3
+    # Длина реплики роли: диалог должен оставаться быстрым
+    max_reply_chars: int = 160
 
 class BotConfig(BaseModel):
     max_history_len: int = 12
@@ -55,6 +69,7 @@ class AppSettings(BaseSettings):
     llm: LLMConfig
     stt: STTConfig
     tts: TTSConfig = Field(default_factory=TTSConfig)
+    dialog: DialogConfig = Field(default_factory=DialogConfig)
     bot: BotConfig
 
     model_config = SettingsConfigDict(

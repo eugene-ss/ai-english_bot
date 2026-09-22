@@ -19,17 +19,19 @@ def convert_ogg_to_wav(input_path: str, output_path: str) -> None:
         output_path,
     ])
 
-def convert_wav_to_ogg_opus(input_path: str, output_path: str) -> None:
-    """Telegram voice требует OGG/Opus, моно."""
-    _run_ffmpeg([
-        "ffmpeg", "-y",
-        "-i", input_path,
-        "-vn",
-        "-ac", "1",
-        "-c:a", "libopus",
-        "-b:a", "48k",
-        output_path,
-    ])
+def convert_wav_to_ogg_opus(
+    input_path: str, output_path: str, tempo: float = 1.0
+) -> None:
+    """Telegram voice требует OGG/Opus, моно.
+
+    `tempo` замедляет или ускоряет речь фильтром atempo, который сохраняет
+    высоту голоса. Допустимый диапазон фильтра — от 0.5 до 2.0.
+    """
+    command = ["ffmpeg", "-y", "-i", input_path, "-vn", "-ac", "1"]
+    if abs(tempo - 1.0) > 1e-3:
+        command += ["-filter:a", f"atempo={max(0.5, min(2.0, tempo)):.3f}"]
+    command += ["-c:a", "libopus", "-b:a", "48k", output_path]
+    _run_ffmpeg(command)
 
 def remove_files(*paths: str) -> None:
     for path in paths:

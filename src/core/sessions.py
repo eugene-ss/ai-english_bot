@@ -24,7 +24,6 @@ redis.call('EXPIRE', KEYS[2], tonumber(ARGV[4]))
 return 1
 """
 
-
 class DurableStorage:
     """История диалога: Redis-список либо память как фолбэк.
 
@@ -40,9 +39,9 @@ class DurableStorage:
         self._local_history: dict[int, list[dict]] = {}
         self._local_generation: dict[int, int] = {}
         self._local_speakable: dict[tuple[int, int], str] = {}
+        self._local_tts: dict[str, str] = {}
 
-    # --- подключение -----------------------------------------------------
-
+    # Подключение
     async def _ensure_redis(self) -> aioredis.Redis | None:
         if not settings.bot.use_redis:
             return None
@@ -89,8 +88,7 @@ class DurableStorage:
                 self._redis = None
                 self._redis_ready = False
 
-    # --- история ---------------------------------------------------------
-
+    # История
     @staticmethod
     def _history_key(user_id: int) -> str:
         return f"chat_session:{user_id}"
@@ -178,8 +176,7 @@ class DurableStorage:
             except (RedisError, OSError) as e:
                 self._drop_redis(e, "clear")
 
-    # --- фраза для озвучки ------------------------------------------------
-
+    # Фраза для озвучки
     @staticmethod
     def _speakable_key(user_id: int, message_id: int | str) -> str:
         return f"speakable:{user_id}:{message_id}"
@@ -207,6 +204,44 @@ class DurableStorage:
                 await pipe.execute()
             except (RedisError, OSError) as e:
                 self._drop_redis(e, "SET speakable")
+
+    # Кэш озвученных фраз
+    @staticmethod
+    def _tts_key(fingerprint: str) -> str:
+        return f"tts_file:{fingerprint}"
+
+    async def get_tts_file_id(self, fingerprint: str) -> str:
+        """Telegram file_id уже озвученной фразы — синтез можно пропустить."""
+        client = await self._ensure_redis()
+        if client is not None:
+            try:
+                value = await client.get(self._tts_key(fingerprint))
+                if value:
+                    return value
+            except (RedisError, OSError) as e:
+                self._drop_redis(e, "GET tts cache")
+        return self._local_tts.get(fingerprint, "")
+
+    async def set_tts_file_id(self, fingerprint: str, file_id: str) -> None:
+        self._local_tts[fingerprint] = file_id
+        client = await self._ensure_redis()
+        if client is not None:
+            try:
+                await client.set(
+                    self._tts_key(fingerprint), file_id, ex=settings.tts.cache_ttl_s
+                )
+            except (RedisError, OSError) as e:
+                self._drop_redis(e, "SET tts cache")
+
+    async def drop_tts_file_id(self, fingerprint: str) -> None:
+        """Telegram отверг file_id — убираем его, чтобы синтезировать заново."""
+        self._local_tts.pop(fingerprint, None)
+        client = await self._ensure_redis()
+        if client is not None:
+            try:
+                await client.delete(self._tts_key(fingerprint))
+            except (RedisError, OSError) as e:
+                self._drop_redis(e, "DEL tts cache")
 
     async def get_speakable(self, user_id: int, message_id: int) -> str:
         client = await self._ensure_redis()

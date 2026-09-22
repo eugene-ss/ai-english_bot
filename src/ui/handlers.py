@@ -1,12 +1,8 @@
-import asyncio
 import logging
-import os
-import tempfile
-import uuid
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command, CommandStart
-from aiogram.types import CallbackQuery, FSInputFile, Message
+from aiogram.filters import Command, CommandStart, StateFilter
+from aiogram.types import CallbackQuery, Message
 
 from src.config import settings
 from src.core import (
@@ -15,50 +11,22 @@ from src.core import (
     LessonReply,
     NothingToExplainError,
     ThrottledError,
-    ai,
     sessions,
     tutor,
 )
 from src.locale import icon, labeled, t
 from src.ui.delivery import deliver
 from src.ui.keyboard import get_action_keyboard
-from src.util import (
-    convert_ogg_to_wav,
-    convert_wav_to_ogg_opus,
-    escape_html,
-    remove_files,
-)
+from src.ui.voice import send_voice_phrase, transcribe_voice_message, voice_too_long
+from src.util import escape_html
 
 logger = logging.getLogger("eng_bot")
 
+# Обычный режим работает только вне сценариев: внутри диалога апдейты
+# забирает dialog_handlers по состоянию FSM
 router = Router(name="tutor")
-
-async def send_teacher_voice(bot: Bot, chat_id: int, user_id: int, speakable: str) -> bool:
-    """Синтезирует короткую EN-фразу и отправляет как Telegram voice."""
-    if not speakable.strip() or not ai.tts_available:
-        return False
-
-    work_dir = tempfile.mkdtemp(prefix="tts_")
-    stem = uuid.uuid4().hex[:8]
-    wav_file = os.path.join(work_dir, f"{stem}.wav")
-    ogg_file = os.path.join(work_dir, f"{stem}.ogg")
-
-    try:
-        await bot.send_chat_action(chat_id=chat_id, action="record_voice")
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, ai.synthesize_speech, speakable, wav_file)
-        await loop.run_in_executor(None, convert_wav_to_ogg_opus, wav_file, ogg_file)
-        await bot.send_voice(chat_id=chat_id, voice=FSInputFile(ogg_file))
-        return True
-    except Exception:
-        logger.exception(f"TTS failed for user {user_id}")
-        return False
-    finally:
-        remove_files(wav_file, ogg_file)
-        try:
-            os.rmdir(work_dir)
-        except OSError:
-            pass
+router.message.filter(StateFilter(None))
+router.callback_query.filter(StateFilter(None))
 
 async def deliver_reply(
     message: Message,
@@ -97,13 +65,7 @@ async def handle_reset(message: Message):
 
 @router.message(F.voice)
 async def handle_voice(message: Message, bot: Bot):
-    voice = message.voice
-    if voice.duration and voice.duration > settings.bot.max_voice_duration_s:
-        await message.answer(
-            labeled("error", "voice_too_long", limit=settings.bot.max_voice_duration_s)
-        )
-        return
-    if voice.file_size and voice.file_size > settings.bot.max_voice_size_bytes:
+    if voice_too_long(message.voice):
         await message.answer(
             labeled("error", "voice_too_long", limit=settings.bot.max_voice_duration_s)
         )
@@ -115,61 +77,42 @@ async def handle_voice(message: Message, bot: Bot):
     user_id = message.from_user.id
     chat_id = message.chat.id
 
-    with tempfile.TemporaryDirectory(prefix="voice_") as work_dir:
-        ogg_file = os.path.join(work_dir, "incoming.ogg")
-        wav_file = os.path.join(work_dir, "incoming.wav")
+    try:
+        user_text = await transcribe_voice_message(bot, message.voice)
+        if not user_text:
+            await status.edit_text(labeled("error", "voice_not_recognized"))
+            return
+
+        await status.edit_text(
+            labeled("thinking", "teacher_thinking_html"), parse_mode="HTML"
+        )
+        reply = await tutor.reply_to_voice(user_id, user_text)
+
+        html_prefix = (
+            f"{icon('you_said')} {t('you_said_html', text=escape_html(user_text))}\n\n"
+            f"{t('response_divider')}\n\n"
+        )
+        await deliver_reply(status, reply, user_id, html_prefix=html_prefix, edit=True)
+
+        # Зеркало канала: на голос отвечаем голосом сразу
+        if reply.speakable:
+            sent = await send_voice_phrase(bot, chat_id, user_id, reply.speakable)
+            if sent is None:
+                await message.answer(labeled("error", "tts_error"))
+
+    except BusyError:
+        await status.edit_text(t("callback_busy"))
+    except ThrottledError:
+        await status.edit_text(t("callback_throttled"))
+    except LLMUnavailableError as e:
+        logger.warning(f"LLM unavailable for user {user_id}: {e}")
+        await status.edit_text(labeled("error", "llm_unavailable"))
+    except Exception as e:
+        logger.exception(f"Voice handling failed for user {user_id}: {e}")
         try:
-            file_info = await bot.get_file(voice.file_id)
-            await bot.download_file(file_info.file_path, destination=ogg_file)
-
-            await status.edit_text(
-                labeled("transcoding", "voice_transcoding_html"), parse_mode="HTML"
-            )
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, convert_ogg_to_wav, ogg_file, wav_file)
-
-            await status.edit_text(
-                labeled("transcribing", "voice_transcribing_html"), parse_mode="HTML"
-            )
-            user_text = await loop.run_in_executor(None, ai.transcribe_audio, wav_file)
-            user_text = (user_text or "").strip()
-
-            if not user_text:
-                await status.edit_text(labeled("error", "voice_not_recognized"))
-                return
-
-            await status.edit_text(
-                labeled("thinking", "teacher_thinking_html"), parse_mode="HTML"
-            )
-            reply = await tutor.reply_to_voice(user_id, user_text)
-
-            html_prefix = (
-                f"{icon('you_said')} {t('you_said_html', text=escape_html(user_text))}\n\n"
-                f"{t('response_divider')}\n\n"
-            )
-            await deliver_reply(
-                status, reply, user_id, html_prefix=html_prefix, edit=True
-            )
-
-            # Зеркало канала: на голос отвечаем голосом сразу
-            if reply.speakable:
-                ok = await send_teacher_voice(bot, chat_id, user_id, reply.speakable)
-                if not ok:
-                    await message.answer(labeled("error", "tts_error"))
-
-        except BusyError:
-            await status.edit_text(t("callback_busy"))
-        except ThrottledError:
-            await status.edit_text(t("callback_throttled"))
-        except LLMUnavailableError as e:
-            logger.warning(f"LLM unavailable for user {user_id}: {e}")
-            await status.edit_text(labeled("error", "llm_unavailable"))
-        except Exception as e:
-            logger.exception(f"Voice handling failed for user {user_id}: {e}")
-            try:
-                await status.edit_text(labeled("error", "voice_process_error"))
-            except Exception:
-                await message.answer(labeled("error", "voice_process_error"))
+            await status.edit_text(labeled("error", "voice_process_error"))
+        except Exception:
+            await message.answer(labeled("error", "voice_process_error"))
 
 @router.message(F.text & ~F.text.startswith("/"))
 async def handle_text(message: Message):
@@ -218,13 +161,16 @@ async def handle_ui_callbacks(callback: CallbackQuery, bot: Bot):
             )
             return
 
-        if action == "ui_listen":
+        if action in ("ui_listen", "ui_repeat", "ui_slower"):
             speakable = await sessions.get_speakable(user_id, message.message_id)
             if not speakable:
                 await callback.answer(t("callback_nothing_to_listen"), show_alert=True)
                 return
             await callback.answer(t("callback_listening"))
-            if not await send_teacher_voice(bot, chat_id, user_id, speakable):
+            sent = await send_voice_phrase(
+                bot, chat_id, user_id, speakable, slow=action == "ui_slower"
+            )
+            if sent is None:
                 await message.answer(labeled("error", "tts_error"))
             return
 

@@ -1,5 +1,7 @@
 import asyncio
+import json
 import logging
+import re
 import time
 
 from groq import Groq
@@ -31,10 +33,29 @@ SYSTEM_INSTRUCTION = (
     "- Если пользователь ответил голосом, обрати внимание на построение фразы и похвали за Speaking."
 )
 
-
 class LLMUnavailableError(RuntimeError):
     """Провайдер не ответил или вернул пустой результат."""
 
+_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+
+def parse_json_object(raw: str) -> dict:
+    """Разбирает JSON-ответ модели, переживая обёртку в ```-блок или пояснения."""
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError:
+        pass
+
+    match = _JSON_OBJECT_RE.search(raw)
+    if not match:
+        return {}
+    try:
+        parsed = json.loads(match.group(0))
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError:
+        return {}
 
 def normalize_history(history: list[dict]) -> list[dict]:
     """Приводит историю к виду, который принимают оба провайдера.
@@ -85,8 +106,7 @@ class AIProviderManager:
             )
         return self._gemini_client
 
-    # --- STT -------------------------------------------------------------
-
+    # STT
     def transcribe_audio(self, wav_file_path: str) -> str:
         with open(wav_file_path, "rb") as file:
             transcription = self.groq_client.audio.transcriptions.create(
@@ -99,8 +119,7 @@ class AIProviderManager:
             return transcription
         return getattr(transcription, "text", "") or ""
 
-    # --- TTS -------------------------------------------------------------
-
+    # TTS
     @property
     def tts_available(self) -> bool:
         if not settings.tts.enabled:
@@ -138,22 +157,30 @@ class AIProviderManager:
         with open(output_wav_path, "wb") as f:
             f.write(payload)
 
-    # --- LLM -------------------------------------------------------------
-
-    async def get_text_response(self, history_messages: list[dict]) -> str:
+    # LLM
+    async def get_text_response(
+        self,
+        history_messages: list[dict],
+        *,
+        system_instruction: str | None = None,
+        as_json: bool = False,
+    ) -> str:
         history = normalize_history(history_messages)
         if not history:
             raise LLMUnavailableError("empty history")
 
+        instruction = system_instruction or self.system_instruction
         provider = settings.llm.active_text_provider
         try:
             if provider == "gemini":
                 answer = await asyncio.wait_for(
-                    self._call_gemini(history), timeout=settings.llm.timeout_s
+                    self._call_gemini(history, instruction, as_json),
+                    timeout=settings.llm.timeout_s,
                 )
             elif provider == "groq":
                 answer = await asyncio.wait_for(
-                    self._call_groq(history), timeout=settings.llm.timeout_s
+                    self._call_groq(history, instruction, as_json),
+                    timeout=settings.llm.timeout_s,
                 )
             else:
                 raise ValueError(f"Unknown provider: {provider}")
@@ -165,7 +192,21 @@ class AIProviderManager:
             raise LLMUnavailableError(f"{provider} returned empty response")
         return answer
 
-    async def _call_gemini(self, history: list[dict]) -> str:
+    async def get_json_response(
+        self, history_messages: list[dict], *, system_instruction: str
+    ) -> dict:
+        """Ответ по схеме. Упражнениям нужен разбираемый результат, не текст."""
+        raw = await self.get_text_response(
+            history_messages, system_instruction=system_instruction, as_json=True
+        )
+        payload = parse_json_object(raw)
+        if not payload:
+            raise LLMUnavailableError("provider returned unparsable JSON")
+        return payload
+
+    async def _call_gemini(
+        self, history: list[dict], instruction: str, as_json: bool
+    ) -> str:
         formatted_history = [
             types.Content(
                 role="user" if msg["role"] == "user" else "model",
@@ -178,28 +219,34 @@ class AIProviderManager:
             model=cfg.model_id,
             contents=formatted_history,
             config=types.GenerateContentConfig(
-                system_instruction=self.system_instruction,
+                system_instruction=instruction,
                 temperature=cfg.temperature,
                 max_output_tokens=settings.llm.max_tokens,
+                response_mime_type="application/json" if as_json else None,
             ),
         )
         return response.text or ""
 
-    async def _call_groq(self, history: list[dict]) -> str:
+    async def _call_groq(
+        self, history: list[dict], instruction: str, as_json: bool
+    ) -> str:
         cfg = settings.llm.groq
-        messages = [{"role": "system", "content": self.system_instruction}]
+        messages = [{"role": "system", "content": instruction}]
         for msg in history:
             messages.append({"role": msg["role"], "content": msg["text"]})
 
+        kwargs = {
+            "model": cfg.model_id,
+            "messages": messages,
+            "temperature": cfg.temperature,
+            "max_tokens": settings.llm.max_tokens,
+        }
+        if as_json:
+            kwargs["response_format"] = {"type": "json_object"}
+
         loop = asyncio.get_running_loop()
         completion = await loop.run_in_executor(
-            None,
-            lambda: self.groq_client.chat.completions.create(
-                model=cfg.model_id,
-                messages=messages,
-                temperature=cfg.temperature,
-                max_tokens=settings.llm.max_tokens,
-            ),
+            None, lambda: self.groq_client.chat.completions.create(**kwargs)
         )
         if not completion.choices:
             return ""
