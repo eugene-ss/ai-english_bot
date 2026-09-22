@@ -25,7 +25,7 @@ env/
 *.cursor
 
 # UV
-uv.lock
+# uv.lock должен быть в репозитории: Dockerfile собирает окружение через uv sync --frozen
 
 # Outputs
 out/

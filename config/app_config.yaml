@@ -21,4 +21,4 @@ bot:
   max_history_len: 12
   bot:
     max_history_len: 12
-    use_redis: false
+    use_redis: true
